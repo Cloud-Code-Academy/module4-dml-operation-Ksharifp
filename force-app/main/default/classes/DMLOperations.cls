@@ -17,7 +17,7 @@
  * The methods within this class serve as practical examples of different DML operations,
  * allowing developers to learn through practice and examples.
  *
- * @author Your Name
+ * @author Kharaam Sharifpour
  */
 
 
@@ -25,19 +25,19 @@ public with sharing class DMLOperations {
 
     /**
      * Question 1
-     * Create a new Account object and inserts it into the database.
+     * Create a new Account object and insert it into the database.
      * The Account will have a random name for uniqueness.
      * @return The Id of the newly created Account.
      */
     public static Id insertNewAccount() {
         // Create a new Account instance
-
+        Account newAcc = new Account();
         // Set some fields on the Account
-
+        newAcc.name = 'Kharaam-'+ Math.round(Math.random()*1000);
         // Insert the Account into the database
-
+        insert newAcc;
         // Return the Id of the newly created Account
-        return null;
+        return newAcc.Id;
     }
 
     /**
@@ -48,8 +48,9 @@ public with sharing class DMLOperations {
      */
     public static void createAccount(String name, String industry) {
         // Create a new Account and set the fields inline
-
+        Account inlineAcc = new Account(Name = name, Industry = industry);
         // Insert the Account
+        insert inlineAcc;
     }
 
     
@@ -61,14 +62,16 @@ public with sharing class DMLOperations {
      */
     public static Id insertNewContact(Id accountId) {
         // Create a new Contact instance
-
+        Contact newContact = new Contact();
         // Set some fields on the Contact
         // Set the AccountId field to the given accountId
-
+        newContact.FirstName = 'Kharaam';
+        newContact.LastName = 'Sharifpour';
+        newContact.AccountId = accountId;
         // Insert the Contact into the database
-
+        insert newContact;
         // Return the Id of the newly created Contact
-        return null;
+        return newContact.Id;
     }
 
     /**
@@ -81,10 +84,11 @@ public with sharing class DMLOperations {
     public static void updateContactLastName(Id contactId, String newLastName) {
         // Retrieve the Contact from the database
         // [SELECT Id FROM Contact WHERE Id = :contactId]
-
+        Contact newContact2 = [SELECT Id, LastName FROM Contact Where Id = :contactId ];
         // Update the Contact's last name
-
+        newContact2.LastName = newLastName;
         // Update the Contact in the database
+        update newContact2;
     }
 
     /**
@@ -97,10 +101,11 @@ public with sharing class DMLOperations {
     public static void updateOpportunityStage(Id oppId, String newStage) {
         // Retrieve the Opportunity from the database
         // [SELECT Id FROM Opportunity WHERE Id = :oppId]
-
+        Opportunity oppoToUpdate = [SELECT Id, StageName FROM Opportunity WHERE Id = :oppId];
         // Update the Opportunity's stage
-
+        oppoToUpdate.StageName = newStage;
         // Update the Opportunity in the database
+        update oppoToUpdate;
     }
 
     /**
@@ -114,9 +119,12 @@ public with sharing class DMLOperations {
     public static void updateAccountFields(Id accountId, String newName, String newIndustry) {
         // Query the account
         // [SELECT Id FROM Account WHERE Id = :accountId]
-
+        Account accToUpdate = [SELECT Id, Name, Industry FROM Account WHERE Id = :accountId];
         // Update the Account with the given Id with the new name and industry
-    }
+        accToUpdate.Name = newName;
+        accToUpdate.Industry = newIndustry;
+        update accToUpdate; 
+    }   
 
 
     /**
@@ -129,9 +137,15 @@ public with sharing class DMLOperations {
      */
     public static void upsertOpportunityList(List<Opportunity> opportunities) {
         // Loop through each Opportunity in the list
+        for ( Opportunity oppoToUpdate : opportunities) {
             // Set the Opportunity's Stage to Qualification
+            oppoToUpdate.StageName = 'Qualification';
             // Set the Opportunity's Close Date to 3 months from today
+            oppoToUpdate.CloseDate = Date.today().addMonths(3);
             // Set the Opportunity's Amount to 50000
+            oppoToUpdate.Amount = 50000;
+        }
+        upsert opportunities;
         // Upsert the opportunities List so that records are either updated or created
     }
 
@@ -146,7 +160,27 @@ public with sharing class DMLOperations {
      * @param oppNames The list of Opportunity names.
      */
     public static void upsertOpportunities(String accountName, List<String> oppNames) {
-        // Loop through each Opportunity name
+        if (oppNames.isEmpty() || accountName == null) {
+            System.debug('There are no opportunity names on the list');
+        }
+        if (!oppNames.isEmpty()) {
+            Set<String> oppNamesSet = new Set<String>(oppNames);
+            Account oppsAcc = new Account(Name = accountName);
+            upsert oppsAcc;
+            Integer counter = 0;
+            List<Opportunity> oppsToUpsert = new List<Opportunity>();
+            // Loop through each Opportunity name
+            for (String oppoName : oppNamesSet) {
+                Opportunity opp = new Opportunity();
+                counter++;
+                opp.Name = oppoName;
+                opp.CloseDate = Date.today().addMonths(3);
+                opp.StageName = 'qualification';
+                opp.AccountId = oppsAcc.Id;
+                oppsToUpsert.add(opp);
+                }
+            upsert oppsToUpsert;
+         }
             // Create an Opportunity with the given name
             // Add the Opportunity to the list
     }
@@ -162,13 +196,19 @@ public with sharing class DMLOperations {
 	public static Account upsertAccount(String accountName) {
 		// Query for the Account
 		List<Account> accounts = [SELECT Id FROM Account WHERE Name = :accountName];
-
+        Account acc = new Account();
 		// if the Account exists, update the description
-
-		// otherwise, create a new Account and set the description
-
+        if ( accounts.isEmpty()) {
+            acc.description = 'New Account';
+            acc.Name = accountName;
+            }
+        if (!accounts.isEmpty()) {
+            acc = accounts.get(0);
+            acc.description = 'Updated Account';
+        } 
 		// Upsert the Account
-		return null;
+        upsert acc;
+		return acc;
 	}
 
     /**
@@ -182,39 +222,51 @@ public with sharing class DMLOperations {
 	 */
 	public static void upsertAccountsWithContacts(List<Contact> contactsToUpsert) {
 		// Loop through each Contact
-
+        for (Contact con : contactsToUpsert) {
 		// Extract the Account Name from Contact's LastName
-
+            String conLastName = con.LastName;
 		// Get the account based on the name or create one if it doesn't exist
-
-		// Link the Contact to its Account using the Account Id
-
+            Account conAcc = upsertAccount(conLastName);
+            //List<Account> createdAcc = [SELECT Id, Name FROM Account WHERE Name = :conLastName LIMIT 1];
+            con.AccountId = conAcc.Id;
+            // Link the Contact to its Account using the Account Id
+            }   
 		// Upsert the Contacts
+        upsert contactsToUpsert;
 	}
 
     /**
      * Question 11
-     * Insert a list of Leads and then deletes them.
+     * Insert a list of Leads and then delete them.
      * @param leadNames The list of Lead names to be inserted.
      */
     public static void insertAndDeleteLeads(List<String> leadNames) {
         // Loop through each Lead name
-
-        // Insert the Leads
-
-        // Delete the Leads
+        for (String ldName : leadNames) {
+            // Insert the Leads
+            Lead myLead = new Lead (LastName = ldName, Company = 'my Company', Status = 'Open - Not Contacted');
+            insert myLead;
+            // Delete the Leads
+            delete myLead;
+        }
     }
 
 
     /**
      * Question 12
-     * Dynamically create the number of cases and relate it to the accountId, then deletes them.
+     * Dynamically create the number of cases and relate it to the accountId, then delete them.
      * @param accountId The account for which the cases will be created and then deleted.
      * @param numOfCases The number of cases to create.
      */
     public static void createAndDeleteCases(String accountId, Integer numOfCases) {
         // Insert the cases
-
+        for (Integer i = 0; i < numOfCases; i++) {
+            Case newCase = new Case(Description = accountId + ' - ' +i, AccountId = accountId);
+            insert newCase;
+            system.debug(newCase);
+            delete newCase;
+        
         // Delete the cases
+        }
     }
 }
