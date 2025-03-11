@@ -232,29 +232,67 @@ public with sharing class DMLOperations {
 	 */
 	public static List<Database.UpsertResult> upsertAccountsWithContacts(List<Contact> contactsToUpsert) {
 		// Loop through each Contact
+        // I am trying to separate the contacts 
+        // There might be three categories of contacts and accounts: 1) Contacts missing Accounts
+        // 2) Contacts with Accounts and 3) Contacts that are not associated with an account but the account exists
+        // I might end up having to put them together to use the upsert method
+        // I rather separate the contacts and accounts and deal with them separately first.
+        // Create a list of contacts who are missing Account.Id (there might be a need to create new accounts or find and connect them to the contact)
+        // Create a list of contacts who are not missing account.Ids and are associated with a list of existing accounts
+        
+        // list of contacts that are missing Account.Id and the Account may or may not exist
+        List<Contact> conMissingAcc = new List<Contact>([SELECT Id, AccountId, LastName FROM Contact WHERE AccountId = null]);
 
-        Set<Account> uniqueAcc = new Set<Account>();
+        // list of contacts that are associated with the correct existing account
+        List<Contact> conWithAcc = new List<Contact>([SELECT Id, AccountId, LastName FROM Contact WHERE AccountId != null]);
+
+        // list of contacts that are not connected to an account but the account exists
+        List<Contact> conNotAssociatedWithAcc = new List<Contact>();
+
+        // to make sure the Account records are unique, create sets
+        //Set<Account> newAcc = new Set<Account>();
+        //Set<Account> existingAcc = new Set<Account>();
         
         Account acc = new Account();
-            if (!contactsToUpsert.isEmpty()) {
-                for (Contact con : contactsToUpsert) {
-                acc.Name = con.LastName;
-                uniqueAcc.add(acc);
-                } 
+
+        List<Account> newAccS = new List<Account>();
+            
+            for (Contact con : contactsToUpsert) {
+                if (con.AccountId == null) {
+                    acc.Name = con.LastName;
+                    conMissingAcc.add(con);
+                    newAccS.add(acc);
+                }
             }
-        List<Contact> conToUpsert = new List<Contact>();
+        List<Database.upsertResult> upsertedAcc = Database.upsert(newAccS,false);
+        List<Account> upsertedAccountIdNames = [SELECT Id, Name FROM Account WHERE Id =: upsertedAcc];
+        Map<String, Id> upsAccNameIdMap = new Map<String, Id>();
+            for (Database.UpsertResult upsAcc : upsertedAcc) {
+                upsAccNameIdMap.put(   ,upsAcc.getId());
+            }
+
+        //Map<String, Id> conLastNameIdMap = new Map<String, Id>();
+          //  for (Contact con2 :conMissingAcc) {
+          //      conLastNameIdMap.put(con2.LastName, con2.Id);
+          //  }
+        
+            for (Contact con3 : contactsToUpsert) {
+                if (upsAccNameIdMap.containsKey(con3.LastName)) {
+                    con3.AccountId = upsAccNameIdMap.get(con3.LastName);
+                }
+            }
+
+
+        /*List<Contact> conToUpsert = new List<Contact>();
         List<Account> accToUpsert = new List<Account>( [SELECT Id, Name FROM Account WHERE Id =:uniqueAcc]);
         List<Database.upsertResult> upsertedAcc = Database.upsert(accToUpsert,false);
         Map<Id, Account> upsAccM = new Map<Id, Account>([SELECT Id, Name FROM Account WHERE Id =:upsertedAcc]);
+        Map<Id, String> upsAccIdName = new Map<Id, String>();
             for (Contact con2 : contactsToUpsert) {
-                for ( Account accM : upsAccM.values()) {
-                    if (con2.LastName == accM.Name) {
-                        con2.AccountId = accM.Id;
-                        conToUpsert.add(con2);
-                    }
-                }
+                if (upsAccM.containsKey(con2.LastName))
             }
         List<Database.upsertResult> consWithAcc = Database.upsert(conToUpsert,false);
+        */
         return upsertedAcc;
     }
         
